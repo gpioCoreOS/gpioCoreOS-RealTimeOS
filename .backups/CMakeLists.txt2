@@ -1,0 +1,82 @@
+cmake_minimum_required(VERSION 3.13)
+
+# Pfad zum Pico SDK (wird normalerweise über PICO_SDK_PATH Umgebungsvariable gesetzt)
+# Wenn PICO_SDK_PATH nicht gesetzt ist, können Sie den Pfad hier explizit definieren:
+# set(PICO_SDK_PATH /path/to/your/pico-sdk)
+
+include($ENV{PICO_SDK_PATH}/pico_sdk_init.cmake)
+
+project(your_pico_rtos_project C CXX ASM)
+
+pico_sdk_init()
+
+# Definieren der Pfade zu pico-extras, pico-playground und FreeRTOS-Kernel
+# Passen Sie diese Pfade an Ihre Installation an!
+set(PICO_EXTRAS_PATH ${PICO_SDK_PATH}/../pico-extras)
+set(PICO_PLAYGROUND_PATH ${PICO_SDK_PATH}/../pico-playground)
+set(FREERTOS_KERNEL_PATH ${PICO_SDK_PATH}/../FreeRTOS-Kernel) # Oder wo auch immer Sie FreeRTOS geklont haben
+
+# Optional: Setzen Sie PICO_BOARD, wenn Sie ein spezifisches Board verwenden
+# set(PICO_BOARD pico_w) # Beispiel für Pico W
+
+# Füge pico-extras und pico-playground hinzu
+add_subdirectory(${PICO_EXTRAS_PATH} pico_extras)
+add_subdirectory(${PICO_PLAYGROUND_PATH} pico_playground)
+
+# Füge FreeRTOS-Kernel hinzu
+# Wichtig: FreeRTOS benötigt spezifische Konfigurationen
+# Es wird empfohlen, einen "portable" FreeRTOS-Port zu verwenden, z.B. den ARM_CM0 Port
+add_subdirectory(${FREERTOS_KERNEL_PATH} FreeRTOS-Kernel)
+
+# Definieren des Ausführbaren Namens
+add_executable(${CMAKE_PROJECT_NAME})
+
+# Quellen für das Hauptprojekt
+target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+    src/main.c
+)
+
+# Hinzufügen der Bibliotheksverzeichnisse
+# Dies fügt die Unterverzeichnisse hinzu, in denen Ihre Treiber-CMakeLists.txt-Dateien liegen
+add_subdirectory(lib/ssd1306_i2c)
+add_subdirectory(lib/lcd1602_i2c)
+add_subdirectory(lib/blink_builtin_led)
+
+# Linke FreeRTOS und die pico_stdlib
+target_link_libraries(${CMAKE_PROJECT_NAME}
+    pico_stdlib
+    FreeRTOS-Kernel # Stellt sicher, dass die FreeRTOS-Kernel-Bibliothek verknüpft wird
+    pico_extras # Verknüpft pico-extras Bibliotheken
+    pico_playground # Verknüpft pico-playground Bibliotheken
+    ssd1306_i2c_lib # Name der Bibliothek aus lib/ssd1306_i2c/CMakeLists.txt
+    lcd1602_i2c_lib # Name der Bibliothek aus lib/lcd1602_i2c/CMakeLists.txt
+    blink_builtin_led_lib # Name der Bibliothek aus lib/blink_builtin_led/CMakeLists.txt
+)
+
+# FreeRTOS Konfiguration
+# Hier ist es wichtig, die FreeRTOS-Konfigurationsdatei (FreeRTOSConfig.h) anzugeben.
+# Sie sollten eine eigene FreeRTOSConfig.h in Ihrem Projektverzeichnis haben.
+# Beispiel: src/FreeRTOSConfig.h
+target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/src # Für main.c und FreeRTOSConfig.h
+    ${FREERTOS_KERNEL_PATH}/include # FreeRTOS Kernel includes
+    ${FREERTOS_KERNEL_PATH}/portable/GCC/ARM_CM0 # Oder den spezifischen Port, den Sie verwenden
+)
+
+# Pico spezifische Optionen für FreeRTOS
+# Deaktiviert bestimmte Pico-Funktionen, die mit FreeRTOS in Konflikt stehen könnten
+# oder nicht benötigt werden, wenn FreeRTOS die Hauptplanung übernimmt.
+pico_enable_stdio_usb(${CMAKE_PROJECT_NAME} 1)
+pico_enable_stdio_uart(${CMAKE_PROJECT_NAME} 0) # Normalerweise nicht benötigt mit FreeRTOS
+pico_set_linker_script(${CMAKE_PROJECT_NAME} ${PICO_SDK_PATH}/src/rp2040/pico_rp2040_inkernel.ld) # Wichtig für FreeRTOS
+
+# Erstelle .uf2, .bin, .hex Dateien
+pico_add_extra_outputs(${CMAKE_PROJECT_NAME})
+
+# Optional: Debugging Einstellungen
+# pico_enable_gdbstub(${CMAKE_PROJECT_NAME} 1)
+
+# Hier können Sie weitere Definitionen hinzufügen, z.B. für FreeRTOS oder Ihre Treiber
+# target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
+#     MY_DRIVER_DEFINE=1
+# )
